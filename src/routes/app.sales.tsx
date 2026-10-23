@@ -718,7 +718,7 @@ function SalesForecasting() {
               <LineChartIcon className="size-12 mb-4 opacity-20" />
               <h3 className="text-lg font-medium text-foreground">Ready to forecast your sales</h3>
               <p className="max-w-md mt-2">
-                Historical sales data from your CSV and manual daily entries will be combined using SARIMA forecasting.
+                Historical sales data from your CSV and manual daily entries will be combined using AI sales forecasting.
               </p>
             </div>
           ) : isGenerating ? (
@@ -726,7 +726,7 @@ function SalesForecasting() {
               <Loader2 className="size-8 animate-spin text-primary" />
               <div className="space-y-1">
                 <p className="font-medium text-foreground animate-pulse">Analyzing your sales data...</p>
-                <p className="text-sm">Training SARIMA forecasting model...</p>
+                <p className="text-sm">Training seasonal sales forecasting model...</p>
               </div>
             </div>
           ) : forecast ? (
@@ -737,7 +737,13 @@ function SalesForecasting() {
               </div>
               <div className="space-y-1 bg-muted/30 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">Expected Growth</p>
-                <p className="text-2xl font-bold text-green-500">+{forecast.summary.expected_growth_percentage}%</p>
+                <p className={cn(
+                  "text-2xl font-bold",
+                  (forecast.summary.expected_growth_percentage ?? 0) >= 0 ? "text-green-500" : "text-destructive"
+                )}>
+                  {(forecast.summary.expected_growth_percentage ?? 0) >= 0 ? "+" : ""}
+                  {forecast.summary.expected_growth_percentage}%
+                </p>
               </div>
               <div className="space-y-1 bg-muted/30 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">Next 30 Days</p>
@@ -745,9 +751,15 @@ function SalesForecasting() {
                 <p className="text-xs text-muted-foreground">{formatCurrency(forecast.summary.forecast_30_days_average)} / day</p>
               </div>
               <div className="space-y-1 bg-muted/30 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Next 6 Months</p>
-                <p className="text-2xl font-bold">{formatCurrency(forecast.summary.forecast_6_months_total)}</p>
-                <p className="text-xs text-muted-foreground">{formatCurrency(forecast.summary.forecast_6_months_average)} / month avg</p>
+                <p className="text-sm text-muted-foreground">
+                  {period === "1y" ? "Next 1 Year" : "Next 6 Months"}
+                </p>
+                <p className="text-2xl font-bold">
+                  {formatCurrency(period === "1y" ? forecast.summary.forecast_1_year_total : forecast.summary.forecast_6_months_total)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatCurrency(period === "1y" ? forecast.summary.forecast_1_year_average : forecast.summary.forecast_6_months_average)} / day
+                </p>
               </div>
             </div>
           ) : null}
@@ -1209,7 +1221,7 @@ function SalesForecasting() {
                     {(detailRecord.expected_growth_percentage ?? 0) >= 0 ? "+" : ""}
                     {detailRecord.expected_growth_percentage}%
                   </p>
-                  <p className="text-xs text-muted-foreground">SARIMA trajectory</p>
+                  <p className="text-xs text-muted-foreground">Seasonal forecast trajectory</p>
                 </div>
               </div>
 
