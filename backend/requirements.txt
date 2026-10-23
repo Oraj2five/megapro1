@@ -9,3 +9,4 @@ PyJWT
 firebase-admin
 python-dotenv
 python-multipart
+supabase
