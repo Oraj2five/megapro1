@@ -844,3 +844,36 @@ def get_user_all_daily_sales(user_id: str) -> List[Dict[str, Any]]:
         logger.error(f"Failed to fetch all daily sales for user '{user_id}': {type(e).__name__}")
         raise DatabaseConnectionError("Failed to retrieve user daily sales.") from None
 
+
+def sync_inventory_sale_to_daily_revenue(
+    user_id: str,
+    sale_date: str,
+    additional_revenue: float
+) -> Optional[Dict[str, Any]]:
+    """
+    Syncs sales recorded in Inventory Management directly to the Daily Sales table in Sales & Revenue.
+    If a record for sale_date already exists, increments the daily revenue.
+    If no record exists, creates a new entry.
+    """
+    if additional_revenue <= 0:
+        return None
+    try:
+        client = get_supabase_client()
+        existing = client.table("daily_sales") \
+            .select("id, user_id, sale_date, daily_revenue") \
+            .eq("user_id", user_id) \
+            .eq("sale_date", sale_date) \
+            .limit(1) \
+            .execute()
+
+        if existing.data and len(existing.data) > 0:
+            rec = existing.data[0]
+            new_rev = round(float(rec.get("daily_revenue", 0.0)) + float(additional_revenue), 2)
+            return update_daily_sales(user_id=user_id, entry_id=rec["id"], daily_revenue=new_rev, sale_date=sale_date)
+        else:
+            return create_daily_sales(user_id=user_id, sale_date=sale_date, daily_revenue=round(float(additional_revenue), 2))
+    except Exception as e:
+        logger.warning(f"Note: Could not auto-sync inventory sale to daily_sales database: {e}")
+        return None
+
+

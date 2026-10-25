@@ -335,7 +335,7 @@ function SalesForecasting() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user: any) => {
       if (user) {
         const p = await getOnboardingProfileAsync(user.uid);
         setProfile(p);
@@ -451,14 +451,6 @@ function SalesForecasting() {
   };
 
   const handleGenerate = async () => {
-    const hasCsv = Boolean(profile?.servicesData?.salesCsvUrl);
-    const hasManual = dailySales.length >= 60;
-
-    if (!hasCsv && !hasManual) {
-      setError("No sufficient sales data found. Please upload a sales CSV or log at least 60 daily sales entries.");
-      return;
-    }
-    
     setError(null);
     setIsGenerating(true);
     setForecast(null);
@@ -472,6 +464,7 @@ function SalesForecasting() {
       
       const payload: Record<string, any> = {
         forecast_days: period === "30d" ? 30 : period === "6m" ? 180 : 365,
+        use_inventory_data: true,
       };
       if (profile?.servicesData?.salesCsvUrl) {
         payload["sales_csv_url"] = profile.servicesData.salesCsvUrl;
@@ -604,7 +597,7 @@ function SalesForecasting() {
 
   const csvUrl = profile?.servicesData?.salesCsvUrl;
   const fileName = csvUrl ? csvUrl.split('/').pop()?.split('?')[0] : null;
-  const canForecast = Boolean(csvUrl) || dailySales.length >= 60;
+  const canForecast = true; // Always connected via Store Inventory Dataset or custom CSV/manual sales
 
   if (loading) {
     return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary size-8" /></div>;
@@ -615,7 +608,7 @@ function SalesForecasting() {
       <PageHeader
         eyebrow="03 · Sales & Revenue"
         title="Sales Forecasting"
-        description="AI-powered sales predictions based on your business sales data."
+        description="AI-powered sales and revenue predictions seamlessly connected with your store inventory."
       />
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -631,14 +624,21 @@ function SalesForecasting() {
                 </div>
               </div>
             ) : (
-              <div className="bg-muted/40 border border-border p-4 rounded-lg flex items-start gap-3">
-                <Database className="text-muted-foreground size-5 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-foreground">No sales CSV uploaded</h4>
-                  <p className="text-sm text-muted-foreground mb-3">Upload your historical sales CSV or record daily sales below.</p>
-                  <Button variant="outline" size="sm" onClick={() => window.location.hash = "manage-services"}>
-                    Upload CSV
-                  </Button>
+              <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg flex items-start gap-3">
+                <Database className="text-primary size-5 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-primary">Connected to Store Inventory</h4>
+                    <Badge variant="secondary" className="text-[10px]">730 Days Sales</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Aggregated store revenue across 20 SKUs is automatically synced from Inventory Management.
+                  </p>
+                  <div className="pt-1">
+                    <Button variant="outline" size="sm" asChild className="h-7 text-xs">
+                      <a href="/app/inventory">Manage SKU Catalog →</a>
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

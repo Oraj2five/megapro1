@@ -10,3 +10,5 @@ firebase-admin
 python-dotenv
 python-multipart
 supabase
+scikit-learn==1.6.1
+joblib

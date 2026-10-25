@@ -8,7 +8,9 @@ This is the FastAPI ML backend for the SMART BPI application. It provides time-s
 - **Pandas**: Used for data validation, cleaning, and preparation.
 
 ## 2. Installation
-Requires Python 3.10+.
+Requires Python 3.10–3.13. The saved inventory model was created with
+scikit-learn 1.6.1, which is pinned in `requirements.txt` so the serialized
+pipeline can be loaded with a compatible version.
 
 ```bash
 cd pixel-perfect/backend
@@ -34,19 +36,33 @@ Copy `.env.example` to `.env` and fill in your Supabase and Firebase credentials
 uvicorn main:app --reload --port 8000
 ```
 
-## 5. Frontend Environment Variable
+## 5. Inventory Demand Prediction & Catalog Endpoints
+
+The backend integrates with `raj_business_demand_model.joblib` (Extra Trees Regressor) and provides full inventory endpoints:
+
+- **GET `/inventory/model-info`**: Inspect model architecture, training cutoff date, required 10 features, and test metrics ($R^2 = 0.688$, $\text{MAE} = 2.10$).
+- **GET `/inventory/catalog?store_id=1`**: Returns catalog products with current stock, velocity, suppliers, stock movements, and valuation. Shows honest empty states when no data is loaded.
+- **POST `/inventory/load-dataset`**: Loads the verified 73,000-record dataset across 5 stores and 20 products (`2024-01-01` to `2025-12-30`).
+- **POST `/inventory/predict-product`**: Accepts `{"product_id": "1001", "store_id": "1"}`. Computes actual lags (`lag_1`, `lag_7`, `lag_14`, `lag_28`, `rolling_mean_7`, `day_of_week`, `month`, `day_of_year`), executes the pipeline model, and generates replenishment recommendations.
+- **POST `/inventory/upload-csv`**: Upload custom multi-store sales/inventory CSV.
+- **DELETE `/inventory/reset`**: Resets active catalog back to the honest empty state.
+
+Interactive OpenAPI docs are available at `http://localhost:8000/docs`.
+
+## 6. Frontend Environment Variable
 Make sure your frontend React app (`pixel-perfect/.env`) contains:
 ```env
 VITE_FORECAST_API_URL=http://localhost:8000
 ```
 
-## 6. API Endpoints
-- **GET `/health`**: Returns `{"status": "healthy"}`
-- **POST `/forecast`**: Generates a forecast.
-  - Body: `{"sales_csv_url": "https://...", "forecast_days": 30}`
-  - Returns `summary` and `forecast` records.
+## 7. Running Tests
+Run the backend test suite:
+```bash
+pytest test_inventory_demand.py -v
+```
 
-## 7. Expected CSV Format
+
+## 8. Expected CSV Format
 ```csv
 sale_date,daily_revenue
 2023-01-01,25000

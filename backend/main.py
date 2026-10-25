@@ -3,12 +3,14 @@ import json
 import logging
 import posixpath
 import re
+
 from urllib.parse import urlparse, unquote, parse_qs
 from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException, Depends, Header, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
+
 
 import firebase_admin
 from firebase_admin import credentials, firestore, auth as firebase_auth
@@ -39,6 +41,7 @@ from database import (
     DailySalesConflictError
 )
 
+from Inventory_demand_prediction.router import router as inventory_router
 from dotenv import load_dotenv
 _backend_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=_backend_env_path)
@@ -103,10 +106,15 @@ def get_firestore_client():
 db = get_firestore_client()
 
 app = FastAPI(title="SMART BPI Sales Forecasting API")
-
+app.include_router(inventory_router)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8080"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -116,6 +124,7 @@ class ForecastRequest(BaseModel):
     sales_csv_url: Optional[str] = None
     forecast_days: int = 30
     idempotency_key: Optional[str] = None
+    use_inventory_data: Optional[bool] = True
 
 class DailySalesCreateRequest(BaseModel):
     sale_date: str
@@ -446,6 +455,7 @@ def generate_forecast(
     
     url = str(req.sales_csv_url).strip() if req.sales_csv_url else None
     df_csv = None
+    is_inventory_source = False
 
     if url:
         # 1. Path-level User Ownership Isolation & URL Structure Validation
@@ -524,6 +534,32 @@ def generate_forecast(
         except Exception as e:
             logger.error(f"Unexpected CSV retrieval error for user '{uid}': {type(e).__name__}")
             raise HTTPException(status_code=500, detail="An unexpected error occurred while processing the sales CSV.")
+    elif req.use_inventory_data:
+        # Seamlessly connect with Store Inventory Management dataset
+        try:
+            import pandas as pd
+            from Inventory_demand_prediction.router import (
+                get_active_dataframe,
+                DEFAULT_DATASET_PATH,
+                parse_inventory_dataframe
+            )
+            inv_df = get_active_dataframe()
+            if inv_df is None or inv_df.empty:
+                if DEFAULT_DATASET_PATH.is_file():
+                    raw_df = pd.read_csv(DEFAULT_DATASET_PATH)
+                    inv_df = parse_inventory_dataframe(raw_df)
+
+            if inv_df is not None and not inv_df.empty:
+                inv_copy = inv_df.copy()
+                inv_copy["revenue"] = inv_copy["units_sold"] * inv_copy["price"]
+                daily_rev = inv_copy.groupby("date")["revenue"].sum().reset_index()
+                daily_rev["sale_date"] = pd.to_datetime(daily_rev["date"]).dt.strftime("%Y-%m-%d")
+                daily_rev["daily_revenue"] = daily_rev["revenue"].round(2)
+                df_csv = daily_rev[["sale_date", "daily_revenue"]].sort_values("sale_date")
+                is_inventory_source = True
+                logger.info(f"Connected Inventory Management sales dataset: {len(df_csv)} days of historical revenue loaded.")
+        except Exception as e:
+            logger.warning(f"Could not load inventory dataset for forecast: {e}")
 
     # 4. Fetch authenticated manual daily sales entries
     try:
@@ -534,7 +570,7 @@ def generate_forecast(
 
     # 5. Merge sales sources according to SMART BPI Data-Source Policy
     try:
-        merged_df = merge_sales_sources(df_csv, manual_entries)
+        merged_df = merge_sales_sources(df_csv, manual_entries, allow_manual_override=is_inventory_source)
     except DailySalesConflictError as e:
         logger.warning(f"Sales data conflict detected for user '{uid}': {e}")
         raise HTTPException(status_code=409, detail=str(e))
@@ -570,16 +606,18 @@ def generate_forecast(
     # 9. Persist forecast in Supabase database
     custom_key = req.idempotency_key or idempotency_header
     try:
+        forecast_source = url or ("inventory_sales_dataset" if is_inventory_source else "manual_daily_sales")
         stored_record = insert_forecast_record(
             user_id=uid,
             forecast_days=req.forecast_days,
-            csv_source_url=url or "manual_daily_sales",
+            csv_source_url=forecast_source,
             series=series,
             forecast_payload=response_payload,
             custom_idempotency_key=custom_key
         )
-        # Augment response payload with persisted record identifier and timestamp
+        # Augment response payload with persisted record identifier, source, and timestamp
         response_payload["id"] = stored_record.get("id")
+        response_payload["data_source"] = "Store Inventory Dataset" if is_inventory_source else ("Custom CSV" if url else "Manual Daily Sales")
         if "created_at" in stored_record:
             response_payload["created_at"] = stored_record["created_at"]
     except DatabaseIdempotencyConflictError as e:

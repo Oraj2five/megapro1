@@ -360,18 +360,20 @@ except ImportError:
 
 def merge_sales_sources(
     df_csv: Optional[pd.DataFrame],
-    manual_entries: list[dict[str, Any]]
+    manual_entries: list[dict[str, Any]],
+    allow_manual_override: bool = False
 ) -> pd.DataFrame:
     """
-    Merges CSV sales data with authenticated manual daily sales records according to
+    Merges CSV/inventory sales data with authenticated manual daily sales records according to
     SMART BPI Data-Source Policy:
     
     1. CSV Preservation: Existing CSV uploads and ownership validation remain the base historical dataset.
     2. Deduplication & Conflict Detection:
        - If a date exists in both CSV and manual entries:
-         - If revenue matches within 0.01 tolerance, deduplicate (never count twice).
-         - If revenue differs, raise DailySalesConflictError to make the conflict visible
-           to the user instead of silently choosing or overwriting values.
+         - If allow_manual_override is True (e.g. inventory catalog base), manual entries take precedence.
+         - If allow_manual_override is False:
+           - If revenue matches within 0.01 tolerance, deduplicate (never count twice).
+           - If revenue differs, raise DailySalesConflictError to make the conflict visible.
     3. Seamless Merge:
        - Non-overlapping manual daily entries (e.g. recent dates logged after the CSV cutoff)
          are merged into the historical dataset.
@@ -429,23 +431,23 @@ def merge_sales_sources(
         rows = [{"sale_date": d, "daily_revenue": r} for d, r in sorted(manual_records.items())]
         return pd.DataFrame(rows)
 
-    # Both CSV and manual records exist: check for conflicts and merge
-    common_dates = sorted(set(csv_records.keys()) & set(manual_records.keys()))
-    for date_str in common_dates:
-        csv_val = csv_records[date_str]
-        man_val = manual_records[date_str]
-        if abs(csv_val - man_val) > 0.01:
-            raise DailySalesConflictError(
-                f"Sales data conflict on date '{date_str}': CSV has ₹{csv_val:,.2f} "
-                f"while manual entry has ₹{man_val:,.2f}. Please resolve the discrepancy "
-                f"in your daily sales or upload an updated CSV."
-            )
+    # Both CSV and manual records exist: check for conflicts unless manual override is permitted
+    if not allow_manual_override:
+        common_dates = sorted(set(csv_records.keys()) & set(manual_records.keys()))
+        for date_str in common_dates:
+            csv_val = csv_records[date_str]
+            man_val = manual_records[date_str]
+            if abs(csv_val - man_val) > 0.01:
+                raise DailySalesConflictError(
+                    f"Sales data conflict on date '{date_str}': CSV has ₹{csv_val:,.2f} "
+                    f"while manual entry has ₹{man_val:,.2f}. Please resolve the discrepancy "
+                    f"in your daily sales or upload an updated CSV."
+                )
 
-    # Merge: CSV records + non-overlapping manual records
+    # Merge: CSV records + manual records (manual records take precedence on common dates if override enabled)
     combined = dict(csv_records)
     for d_str, man_val in manual_records.items():
-        if d_str not in combined:
-            combined[d_str] = man_val
+        combined[d_str] = man_val
 
     merged_rows = [{"sale_date": d, "daily_revenue": combined[d]} for d in sorted(combined.keys())]
     return pd.DataFrame(merged_rows)

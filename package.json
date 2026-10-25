@@ -88,8 +88,5 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "8.1.5"
-  },
-  "optionalDependencies": {
-    "@rolldown/binding-win32-x64-msvc": "file:rolldown-binding-win32-x64-msvc-1.2.1.tgz"
   }
 }

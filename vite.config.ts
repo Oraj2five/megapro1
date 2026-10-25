@@ -12,4 +12,39 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    resolve: {
+      alias: {
+        "firebase/app": "@firebase/app",
+        "firebase/auth": "@firebase/auth",
+        "firebase/firestore": "@firebase/firestore",
+        "firebase/storage": "@firebase/storage",
+      },
+    },
+    ssr: {
+      noExternal: [/^@?firebase(\/.*)?$/],
+    },
+    optimizeDeps: {
+      force: false,
+      include: [
+        "lucide-react",
+        "recharts",
+        "sonner",
+        "clsx",
+        "tailwind-merge",
+        "class-variance-authority",
+        "@radix-ui/react-select",
+        "@radix-ui/react-dialog",
+        "@radix-ui/react-tabs",
+        "@radix-ui/react-slot",
+        "@radix-ui/react-progress",
+        "@radix-ui/react-label",
+        "@radix-ui/react-tooltip",
+        "@radix-ui/react-switch",
+        "@radix-ui/react-separator",
+        "@radix-ui/react-avatar",
+        "@radix-ui/react-dropdown-menu",
+      ],
+    },
+  },
 });

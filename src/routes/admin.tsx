@@ -46,7 +46,7 @@ function AdminPage() {
       if (!db) throw new Error("Database not initialized");
       const snap = await getDocs(collection(db, "businesses"));
       const data: OnboardingProfile[] = [];
-      snap.forEach((doc) => {
+      snap.forEach((doc: any) => {
         data.push({ ...doc.data(), userId: doc.id } as OnboardingProfile);
       });
       setUsers(data);

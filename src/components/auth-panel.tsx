@@ -15,6 +15,19 @@ import {
   isUserVerified,
 } from "@/lib/auth";
 
+function getAuthErrorCode(error: unknown): string | undefined {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+
+  return undefined;
+}
+
 export function AuthPanel({ mode }: { mode: "login" | "signup" }) {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -55,7 +68,36 @@ export function AuthPanel({ mode }: { mode: "login" | "signup" }) {
         navigate({ to: "/onboarding" });
       }
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Authentication failed");
+      const code = getAuthErrorCode(error);
+      const messages: Record<string, string> = {
+        "auth/invalid-email": "Enter a valid email address.",
+        "auth/weak-password": "Choose a stronger password with at least 6 characters.",
+        "auth/invalid-credential": "Email or password is incorrect. Check your sign-in details.",
+        "auth/user-not-found": "No account was found for this email. Create an account first.",
+        "auth/wrong-password": "The password is incorrect. Check your sign-in details.",
+        "auth/too-many-requests": "There have been too many attempts. Wait a while and try again.",
+        "auth/network-request-failed":
+          "Could not reach Firebase. Check your internet connection and try again.",
+        "auth/user-disabled": "This account has been disabled. Contact support for help.",
+        "auth/operation-not-allowed":
+          "Email and password sign-in is not enabled for this Firebase project.",
+        "auth/account-exists-with-different-credential":
+          "An account already exists for this email with a different sign-in method. Use that method instead.",
+      };
+
+      if (mode === "signup" && code === "auth/email-already-in-use") {
+        toast.error("This email already has an account. Sign in with it instead.", {
+          action: {
+            label: "Go to sign in",
+            onClick: () => navigate({ to: "/login" }),
+          },
+        });
+      } else {
+        toast.error(
+          (code && messages[code]) ||
+            (error instanceof Error ? error.message : "Authentication failed. Please try again."),
+        );
+      }
     } finally {
       setLoading(false);
     }

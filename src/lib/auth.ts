@@ -114,7 +114,7 @@ export function onAuthStateChange(callback: (session: MockSession | null) => voi
         phone: user.phoneNumber || "",
         photoURL: user.photoURL || undefined,
         emailVerified: user.emailVerified,
-        provider: user.providerData.some((p) => p.providerId === "google.com") ? "google" : "email",
+        provider: user.providerData.some((p: { providerId: string }) => p.providerId === "google.com") ? "google" : "email",
       });
     } else {
       callback(null);
